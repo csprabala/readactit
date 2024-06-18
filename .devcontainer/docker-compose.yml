@@ -1,23 +1,18 @@
-version: '3'
+version: '3.9'
 services:
-  # devcontainer:
-  #   image: mcr.microsoft.com/devcontainers/universal:2
-  #   volumes:
-  #     - .:/workspace:cached
-
-  tika:
-    image: apache/tika:latest
-    ports:
-      - "9998:9998"
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/universal:2
+    volumes:
+      - .:/workspace:cached
 
   fastapi:
+    profiles: [app]
     build: ../fastapi
     ports:
       - "8000:8000"
-    depends_on:
-      - tika
-
+        
   react:
+    profiles: [app]
     build: ../.
     ports:
       - "3000:3000"
