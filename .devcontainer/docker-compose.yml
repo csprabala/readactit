@@ -10,6 +10,9 @@ services:
     build: ../fastapi
     ports:
       - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../fastapi/uploaded-files:/app/uploaded-files
         
   react:
     profiles: [app]
