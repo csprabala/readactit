@@ -33,9 +33,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir uploaded_files
 
-# Add alias to .bashrc for interactive shell sessions
-RUN echo "alias pdf2htmlex='docker run -ti --rm -w /uploaded_files pdf2htmlex/pdf2htmlex'" >> ~/.bashrc
-
 COPY . .
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

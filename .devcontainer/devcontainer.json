@@ -1,6 +1,6 @@
 {
     // Use Docker Compose instead of a single image
-    "dockerComposeFile": "docker-compose.yml",
+    "dockerComposeFile": "docker-compose-copy.yml",
     "service": "devcontainer",
     "workspaceFolder": "/workspace"
 

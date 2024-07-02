@@ -1,13 +1,18 @@
 version: '3.9'
 services:
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/universal:2
+    volumes:
+      - .:/workspace:cached
+
   fastapi:
-    profiles: [backend]
+    profiles: [app]
     build: ../fastapi
     ports:
       - "8000:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - file_store:/uploaded-files
+      - ../fastapi/uploaded-files:/app/uploaded-files
         
   react:
     profiles: [app]
@@ -17,6 +22,3 @@ services:
     command: npm start
     depends_on:
       - fastapi
-
-volumes:
-  file_store:
