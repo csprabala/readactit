@@ -10,6 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import io
 import tarfile
+import re
+from lxml import etree
+from typing import List
+import marvin
+from dotenv import load_dotenv
+
+load_dotenv()
 
 pdf_to_html_image = 'pdf2htmlex/pdf2htmlex:0.18.8.rc2-master-20200820-ubuntu-20.04-x86_64'
 alpine_image = 'alpine:latest'
@@ -20,6 +27,8 @@ origins = [
     "http://localhost:3000",  # Depending on how the React app is accessed
 ]
 
+# Simple global cache
+cache = {}
 
 def check_docker_connection(docker_client):
     docker_client.ping()
@@ -82,6 +91,35 @@ def convert_pdf_to_html(pdf_file: str) -> None:
         print(f"Conversion failed with exit code: {result['StatusCode']}")
     else:
         print(f"Successfully converted {pdf_file}")
+
+def extract_text_from_html(html_content: str) -> str:
+    # Parse the XHTML content
+    parser = etree.HTMLParser(recover=True)  # This allows it to recover from errors
+    tree = etree.fromstring(html_content.encode('utf-8'), parser)
+
+    # Remove the head element if it exists
+    head = tree.find('.//head')
+    if head is not None:
+        head.getparent().remove(head)
+
+    # Define a function to recursively extract text
+    def extract_text(element):
+        text = element.text or ''
+        for child in element:
+            if child.tag not in ['script', 'style', 'img']:  # Ignore script and style tags
+                text += extract_text(child)
+            if child.tail:
+                text += child.tail
+        return text
+
+    # Extract all text
+    all_text = extract_text(tree)
+
+    # Clean up the text
+    all_text = re.sub(r'\s+', ' ', all_text)  # Replace multiple whitespace with single space
+    all_text = all_text.strip()  # Remove leading/trailing whitespace
+
+    return all_text
 
 
 @app.post("/upload")
@@ -167,12 +205,37 @@ def upload_pdf(file: UploadFile = File(...)):
         container.remove()
         docker_client.close()
 
-    if exec_result.exit_code == 0:
-        print("Successfully read the converted HTML file.")
-        html_content = exec_result.output.decode("utf-8")
-        return HTMLResponse(content=html_content)
-    else:
+    if exec_result.exit_code != 0:
         raise HTTPException(status_code=500, detail="Failed to read the converted HTML file.")
+    
+    print("Successfully read the converted HTML file.")
+    html_content = exec_result.output.decode("utf-8")
+
+    text_content = extract_text_from_html(html_content)
+    print(text_content)
+    cache['text_only'] = text_content
+
+    print("Successfully extracted text from the HTML content.")
+
+    return HTMLResponse(content=html_content)
+
+@marvin.fn
+def extract_redactable_entities(direction: str, text: str) -> List[str]:
+    """
+    use the direction provided below to extract a list of elements from the text that confirm to the direction
+    direction: `direction`
+    text: `text`
+    """
+
+def classify_text(text: str) -> bool:
+    return marvin.classify(text, labels=bool)
+
+@app.get("/ai-response")
+def get_ai_response(query: str):
+    if(cache.get('text_only') == None):
+        return HTTPException(status_code=500, detail="No text content found. Please upload a PDF file first.")
+    
+    return {'response': extract_redactable_entities(direction=query, text=cache['text_only'])}
 
 @app.get("/")
 def read_root():
