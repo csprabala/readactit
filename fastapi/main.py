@@ -235,7 +235,24 @@ def get_ai_response(query: str):
     if(cache.get('text_only') == None):
         return HTTPException(status_code=500, detail="No text content found. Please upload a PDF file first.")
     
-    return {'response': extract_redactable_entities(direction=query, text=cache['text_only'])}
+    text = cache['text_only']
+    words = text.split()
+    chunks = [' '.join(words[i:i + 1000]) for i in range(0, len(words), 1000)]
+    
+    responses = []
+    for chunk in chunks:
+        response = extract_redactable_entities(direction=query, text=chunk)
+        responses.append(response)
+
+    # flatten the list of lists, drop empty lists
+    responses = [item for sublist in responses for item in sublist if item]
+
+    # Aggregate the results
+    aggregated_response = {
+        'response': responses
+    }
+    
+    return aggregated_response
 
 @app.get("/")
 def read_root():

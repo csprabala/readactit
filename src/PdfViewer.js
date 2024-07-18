@@ -152,19 +152,41 @@ const PdfViewer = () => {
    // Function to redact a div
   const redactDiv = (div, textToRedact) => {
 
-    // Store the original content and dimensions
-    const originalContent = div.innerHTML;
-    const originalWidth = div.offsetWidth;
-    const originalHeight = div.offsetHeight;
+    const stack = [div];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (node.nodeType === Node.TEXT_NODE || node.nodeName === 'SPAN') {
+        if(textToRedact.includes(node.textContent.trim())){
+          const blackRectangle = '█'.repeat(node.textContent.length);
+          const newTextNode = document.createTextNode(blackRectangle);
+          node.parentNode.replaceChild(newTextNode, node);
+        }
+        else if(node.textContent.includes(textToRedact)){
+          const blackRectangle = '█'.repeat(textToRedact.length);
+          const newTextNode = document.createTextNode(node.textContent.replace(textToRedact, blackRectangle));
+          node.parentNode.replaceChild(newTextNode, node);
+        }
 
-    // Replace content with a black rectangle
-    div.innerHTML = '';
-    div.style.backgroundColor = 'black';
-    div.style.width = originalWidth + 'px';
-    div.style.height = originalHeight + 'px';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        for (let i = node.childNodes.length - 1; i >= 0; i--) {
+          stack.push(node.childNodes[i]);
+        }
+      }
+    }
 
-    // Store original content as a data attribute (optional)
-    div.setAttribute('data-original-content', originalContent);
+    // // Store the original content and dimensions
+    // const originalContent = div.innerHTML;
+    // const originalWidth = div.offsetWidth;
+    // const originalHeight = div.offsetHeight;
+
+    // // Replace content with a black rectangle
+    // div.innerHTML = '';
+    // div.style.backgroundColor = 'black';
+    // div.style.width = originalWidth + 'px';
+    // div.style.height = originalHeight + 'px';
+
+    // // Store original content as a data attribute (optional)
+    // div.setAttribute('data-original-content', originalContent);
   };
 
 
