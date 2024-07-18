@@ -4,7 +4,7 @@ import Bot from './Bot';
 const PdfViewer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [xhtmlContent, setXhtmlContent] = useState('');
-  const [extractedText, setExtractedText] = useState('');
+
   // const [redactedContent, setRedactedContent] = useState('');
   const iframeRef = useRef(null);
 
@@ -22,9 +22,6 @@ const PdfViewer = () => {
       .then((xhtml) => {
         console.log('Success:', 'xhtml content received');
         setXhtmlContent(xhtml); // Store the XHTML content
-        let parsedText = extractTextFromXhtml(xhtml);
-        // console.log('Extracted Text is: ', parsedText);
-        setExtractedText(parsedText); // Extract text from the XHTML content
         setIsLoading(false); // Stop loading
       })
       .catch((error) => {
@@ -65,43 +62,6 @@ const PdfViewer = () => {
     // setRedactedContent(newContent);
   };
 
-  const extractTextFromXhtml = (xhtml) => {
-    const parser = new DOMParser();
-    // Use 'text/html' instead of 'application/xml'
-    const doc = parser.parseFromString(xhtml, 'text/html');
-
-    const extractTextFromNode = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent.trim();
-      }
-
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        // Ignore script and style elements
-        if (node.tagName.toLowerCase() === 'script' || node.tagName.toLowerCase() === 'style') {
-          return '';
-        }
-
-        // Recursively extract text from child nodes
-        return Array.from(node.childNodes)
-          .map(extractTextFromNode)
-          .filter(text => text.length > 0)
-          .join(' ');
-      }
-
-      return '';
-    };
-
-    // Check if parsing produced errors
-    const parserErrors = doc.querySelector('parsererror');
-    if (parserErrors) {
-      console.warn('Parser errors detected:', parserErrors.textContent);
-      // You might want to handle this case differently
-    }
-
-    const textContent = extractTextFromNode(doc.body);
-    return textContent.replace(/\s+/g, ' ').trim();
-  };
-
   console.log('Outside useEffect');
   useEffect(() => {
     console.log('First useEffect call')
@@ -134,34 +94,53 @@ const PdfViewer = () => {
   const handleDataFromChild = (data) => {
     console.log('Data received from child:', data);
     const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentDocument || !iframe.contentWindow) return;
-  
+    if (!iframe || !iframe.contentDocument || !iframe.contentWindow) {
+      console.error('Cannot access iframe content');
+      return;
+    }
+
     const iframeDoc = iframe.contentDocument;
     let foundSegments = new Set();
-  
-    const divs = iframeDoc.body.getElementsByTagName('div');
-  
-    for (let div of divs) {
-      let divText = '';
-      
-      // Concatenate text from all child nodes
-      for (let child of div.childNodes) {
-        if (child.nodeType === Node.TEXT_NODE || child.nodeName === 'SPAN') {
-          divText += child.textContent;
+
+    const parentDivs = iframeDoc.querySelectorAll('div[data-page-no]');
+    console.log('Total parent divs found:', parentDivs.length);
+
+    // Remove unnecessary spans
+    parentDivs.forEach((parentDiv) => {
+      const childDivs = Array.from(parentDiv.getElementsByTagName('div')).slice(1);
+      console.log('Total child divs found in parent:', childDivs.length);
+
+      for (let div of childDivs) {
+        let divText = '';
+
+        // Use a stack to traverse all child nodes iteratively
+        const stack = [div];
+        while (stack.length > 0) {
+          const node = stack.pop();
+          if (node.nodeType === Node.TEXT_NODE || node.nodeName === 'SPAN') {
+            divText += node.textContent;
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            for (let i = node.childNodes.length - 1; i >= 0; i--) {
+              stack.push(node.childNodes[i]);
+            }
+          }
         }
+
+        console.log('Div text:', divText);
+
+        // Check for each text segment
+        data.forEach((textSegment) => {
+          if (divText.includes(textSegment)) {
+            console.log('Found text to redact:', textSegment, 'in div:', div);
+            // Redact the specific text in the div
+            redactDiv(div, textSegment);
+            console.log('Redacted text in div:', textSegment);
+            foundSegments.add(textSegment);
+          }
+        });
       }
-  
-      // Check for each text segment
-      data.forEach((textSegment) => {
-        if (divText.includes(textSegment) && !foundSegments.has(textSegment)) {
-          // Redact the div
-          redactDiv(div);
-          console.log('Redacted div containing text:', textSegment);
-          foundSegments.add(textSegment);
-        }
-      });
-    }
-  
+    });
+
     // Log any segments that weren't found
     data.forEach((textSegment) => {
       if (!foundSegments.has(textSegment)) {
@@ -169,23 +148,28 @@ const PdfViewer = () => {
       }
     });
   };
-  
-  // Function to redact a div
-  const redactDiv = (div) => {
+
+   // Function to redact a div
+  const redactDiv = (div, textToRedact) => {
+
     // Store the original content and dimensions
     const originalContent = div.innerHTML;
     const originalWidth = div.offsetWidth;
     const originalHeight = div.offsetHeight;
-  
+
     // Replace content with a black rectangle
     div.innerHTML = '';
     div.style.backgroundColor = 'black';
     div.style.width = originalWidth + 'px';
     div.style.height = originalHeight + 'px';
-  
+
     // Store original content as a data attribute (optional)
     div.setAttribute('data-original-content', originalContent);
   };
+
+
+
+
 
   return (
     <div>
