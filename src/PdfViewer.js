@@ -150,47 +150,75 @@ const PdfViewer = () => {
   };
 
    // Function to redact a div
-  const redactDiv = (div, textToRedact) => {
-
+   const redactDiv = (div, textToRedact) => {
     const stack = [div];
+    let accumulatedText = '';
+    let accumulatedNodes = [];
+  
+    const redactInNode = (node, startIndex, endIndex) => {
+      const text = node.textContent;
+      const beforeText = text.slice(0, startIndex);
+      const redactedText = '█'.repeat(endIndex - startIndex);
+      const afterText = text.slice(endIndex);
+      const newTextNode = document.createTextNode(beforeText + redactedText + afterText);
+      node.parentNode.replaceChild(newTextNode, node);
+    };
+  
+    const findBestMatch = (text, pattern) => {
+      const m = text.length;
+      const n = pattern.length;
+      const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
+      let maxLength = 0;
+      let endIndex = 0;
+  
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          if (text[i - 1].toLowerCase() === pattern[j - 1].toLowerCase()) {
+            dp[i][j] = dp[i - 1][j - 1] + 1;
+            if (dp[i][j] > maxLength) {
+              maxLength = dp[i][j];
+              endIndex = i;
+            }
+          }
+        }
+      }
+  
+      return maxLength >= n * 1 ? [endIndex - maxLength, endIndex] : null;
+    };
+  
     while (stack.length > 0) {
       const node = stack.pop();
       if (node.nodeType === Node.TEXT_NODE || node.nodeName === 'SPAN') {
-        if(textToRedact.includes(node.textContent.trim())){
-          const blackRectangle = '█'.repeat(node.textContent.length);
-          const newTextNode = document.createTextNode(blackRectangle);
-          node.parentNode.replaceChild(newTextNode, node);
+        accumulatedText += node.textContent;
+        accumulatedNodes.push(node);
+  
+        const match = findBestMatch(accumulatedText, textToRedact);
+        if (match) {
+          const [startIndex, endIndex] = match;
+          let currentIndex = 0;
+  
+          accumulatedNodes.forEach(accNode => {
+            const nodeLength = accNode.textContent.length;
+            if (currentIndex + nodeLength > startIndex && currentIndex < endIndex) {
+              const nodeStartIndex = Math.max(0, startIndex - currentIndex);
+              const nodeEndIndex = Math.min(nodeLength, endIndex - currentIndex);
+              redactInNode(accNode, nodeStartIndex, nodeEndIndex);
+            }
+            currentIndex += nodeLength;
+          });
+  
+          // Reset accumulation
+          accumulatedText = accumulatedText.slice(endIndex);
+          accumulatedNodes = accumulatedNodes.filter(node => 
+            currentIndex > endIndex || node.textContent.length > 0);
         }
-        else if(node.textContent.includes(textToRedact)){
-          const blackRectangle = '█'.repeat(textToRedact.length);
-          const newTextNode = document.createTextNode(node.textContent.replace(textToRedact, blackRectangle));
-          node.parentNode.replaceChild(newTextNode, node);
-        }
-
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         for (let i = node.childNodes.length - 1; i >= 0; i--) {
           stack.push(node.childNodes[i]);
         }
       }
     }
-
-    // // Store the original content and dimensions
-    // const originalContent = div.innerHTML;
-    // const originalWidth = div.offsetWidth;
-    // const originalHeight = div.offsetHeight;
-
-    // // Replace content with a black rectangle
-    // div.innerHTML = '';
-    // div.style.backgroundColor = 'black';
-    // div.style.width = originalWidth + 'px';
-    // div.style.height = originalHeight + 'px';
-
-    // // Store original content as a data attribute (optional)
-    // div.setAttribute('data-original-content', originalContent);
   };
-
-
-
 
 
   return (

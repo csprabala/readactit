@@ -130,3 +130,8 @@ dist
 .pnp.*
 
 *.env
+
+# add pycache anywhere
+**/__pycache__/
+*.py[cod]
+*$py.class
