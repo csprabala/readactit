@@ -4,7 +4,7 @@ import logging
 import shutil
 import subprocess
 from subprocess import CalledProcessError
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -121,6 +121,12 @@ def extract_text_from_html(html_content: str) -> str:
 
     return all_text
 
+@app.post("/pdf-text")
+async def receive_pdf_text(request: Request):
+    body = await request.json()
+    text = body.get('text', '')
+    cache['text_only'] = text
+    return {"message": "Text received successfully."}
 
 @app.post("/upload")
 def upload_pdf(file: UploadFile = File(...)):

@@ -91,16 +91,6 @@ const PdfViewer = () => {
     };
   }, [xhtmlContent]);
 
-
-  function extractTextNodes(node, textNodes = []) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      textNodes.push(node);
-    } else {
-      node.childNodes.forEach(child => extractTextNodes(child, textNodes));
-    }
-    return textNodes;
-  }
-
   const handleDataFromChild = (data) => {
     console.log('Data received from child:', data);
     const iframe = iframeRef.current;
@@ -120,74 +110,35 @@ const PdfViewer = () => {
       const childDivs = Array.from(parentDiv.getElementsByTagName('div')).slice(1);
       console.log('Total child divs found in parent:', childDivs.length);
 
-      let concatenatedText = '';
-      let textNodes = [];
-      let textNodeInfo = [];
+      for (let div of childDivs) {
+        let divText = '';
 
-      childDivs.forEach((div, divIndex) => {
-        const nodes = extractTextNodes(div);
-        nodes.forEach((node, nodeIndex) => {
-          textNodes.push(node);
-          textNodeInfo.push({ divIndex, nodeIndex, startPos: concatenatedText.length, endPos: concatenatedText.length + node.textContent.length });
-          concatenatedText += node.textContent;
-        });
-      });
-
-      data.forEach(searchString => {
-        console.log('Searching for:', searchString);
-        let startIndex = concatenatedText.indexOf(searchString);
-        console.log('Start index:', startIndex);
-        console.log('text at index', concatenatedText.substring(startIndex, startIndex + searchString.length));
-        while (startIndex !== -1) {
-          let currentIndex = startIndex;
-          let remainingLength = searchString.length;
-
-          for (let i=0; i<textNodeInfo.length; i++) {
-            if (currentIndex >= textNodeInfo[i].startPos && currentIndex < textNodeInfo[i].endPos) {
-              let node = textNodes[i];
-              if (!node || !node.parentNode) continue;
-              
-              console.log("text content", node.textContent);
-
-
-              let start = currentIndex - textNodeInfo[i].startPos;
-              let end = Math.min(node.textContent.length, start + remainingLength);
-
-              // Highlight the matched text
-              let part1 = node.textContent.substring(0, start);
-              console.log("part1", part1);
-              let part2 = node.textContent.substring(start, end);
-              console.log("part2", part2);
-              let part3 = node.textContent.substring(end);
-              console.log("part3", part3);
-
-              let span = document.createElement('span');
-              span.style.backgroundColor = 'yellow';
-              span.textContent = part2;
-
-              let parent = node.parentNode;
-              parent.insertBefore(document.createTextNode(part1), node);
-              parent.insertBefore(span, node);
-              parent.insertBefore(document.createTextNode(part3), node);
-              parent.removeChild(node);
-
-              remainingLength -= (end - start);
-              currentIndex += (end - start);
-
+        // Use a stack to traverse all child nodes iteratively
+        const stack = [div];
+        while (stack.length > 0) {
+          const node = stack.pop();
+          if (node.nodeType === Node.TEXT_NODE || node.nodeName === 'SPAN') {
+            divText += node.textContent;
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            for (let i = node.childNodes.length - 1; i >= 0; i--) {
+              stack.push(node.childNodes[i]);
             }
-            if (remainingLength <= 0) {
-              break;
-            }
-
           }
-
-          startIndex = concatenatedText.indexOf(searchString, startIndex + searchString.length);
-
         }
 
+        console.log('Div text:', divText);
 
-      });
-
+        // Check for each text segment
+        data.forEach((textSegment) => {
+          if (divText.includes(textSegment)) {
+            console.log('Found text to redact:', textSegment, 'in div:', div);
+            // Redact the specific text in the div
+            redactDiv(div, textSegment);
+            console.log('Redacted text in div:', textSegment);
+            foundSegments.add(textSegment);
+          }
+        });
+      }
     });
 
     // Log any segments that weren't found
@@ -198,7 +149,76 @@ const PdfViewer = () => {
     });
   };
 
-
+   // Function to redact a div
+   const redactDiv = (div, textToRedact) => {
+    const stack = [div];
+    let accumulatedText = '';
+    let accumulatedNodes = [];
+  
+    const redactInNode = (node, startIndex, endIndex) => {
+      const text = node.textContent;
+      const beforeText = text.slice(0, startIndex);
+      const redactedText = '█'.repeat(endIndex - startIndex);
+      const afterText = text.slice(endIndex);
+      const newTextNode = document.createTextNode(beforeText + redactedText + afterText);
+      node.parentNode.replaceChild(newTextNode, node);
+    };
+  
+    const findBestMatch = (text, pattern) => {
+      const m = text.length;
+      const n = pattern.length;
+      const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
+      let maxLength = 0;
+      let endIndex = 0;
+  
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          if (text[i - 1].toLowerCase() === pattern[j - 1].toLowerCase()) {
+            dp[i][j] = dp[i - 1][j - 1] + 1;
+            if (dp[i][j] > maxLength) {
+              maxLength = dp[i][j];
+              endIndex = i;
+            }
+          }
+        }
+      }
+  
+      return maxLength >= n * 1 ? [endIndex - maxLength, endIndex] : null;
+    };
+  
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (node.nodeType === Node.TEXT_NODE || node.nodeName === 'SPAN') {
+        accumulatedText += node.textContent;
+        accumulatedNodes.push(node);
+  
+        const match = findBestMatch(accumulatedText, textToRedact);
+        if (match) {
+          const [startIndex, endIndex] = match;
+          let currentIndex = 0;
+  
+          accumulatedNodes.forEach(accNode => {
+            const nodeLength = accNode.textContent.length;
+            if (currentIndex + nodeLength > startIndex && currentIndex < endIndex) {
+              const nodeStartIndex = Math.max(0, startIndex - currentIndex);
+              const nodeEndIndex = Math.min(nodeLength, endIndex - currentIndex);
+              redactInNode(accNode, nodeStartIndex, nodeEndIndex);
+            }
+            currentIndex += nodeLength;
+          });
+  
+          // Reset accumulation
+          accumulatedText = accumulatedText.slice(endIndex);
+          accumulatedNodes = accumulatedNodes.filter(node => 
+            currentIndex > endIndex || node.textContent.length > 0);
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        for (let i = node.childNodes.length - 1; i >= 0; i--) {
+          stack.push(node.childNodes[i]);
+        }
+      }
+    }
+  };
 
 
   return (
@@ -214,7 +234,7 @@ const PdfViewer = () => {
         />
       </div>
       {isLoading && <div>Loading file...</div>}
-      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px' }}>
+      <div style={{ display:  'flex', justifyContent: 'space-between', padding: '10px' }}>
         <iframe ref={iframeRef} srcDoc={xhtmlContent} style={{ width: 'calc(50% - 15px)', height: '100vh', border: '2px solid black' }}></iframe>
         <Bot sendDataToParent={handleDataFromChild} />
 
@@ -223,7 +243,7 @@ const PdfViewer = () => {
         </div> */}
         {/* <iframe srcDoc={redactedContent || xhtmlContent} style={{ width: 'calc(50% - 15px)', height: '100vh', border: '2px solid black' }}></iframe> */}
       </div>
-
+      
     </div>
 
   );

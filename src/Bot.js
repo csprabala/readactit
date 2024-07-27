@@ -37,16 +37,45 @@ const Bot = ({sendDataToParent}) => {
 
   return (
     <div style={{ width: 'calc(50% - 15px)', height: '100vh', border: '2px solid black' }} >
-      <p><h3>Interactive AI Chatbot that will redact contents from the loaded document:</h3></p>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={userInput}
-          onChange={handleInputChange}
-          placeholder="Type your message here..."
-          style={{ width: 'calc(100% - 70px)' }}
-        />
-        <button type="submit">Send</button>
+    <label>Click a checkbox to redact specified information: </label>
+    <br/>
+    <form onSubmit={handleSubmit}>
+      <div className="flex items-center space-x-4">
+        
+        <label className="flex items-center space-x-2">
+          <input type="checkbox" className="form-checkbox h-5 w-5 text-blue-600" />
+          <span>PII-Data</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <input type="checkbox" className="form-checkbox h-5 w-5 text-blue-600" />
+          <span>Financial-Data</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <input type="checkbox" className="form-checkbox h-5 w-5 text-blue-600" />
+          <span>contractual-clauses</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <input type="checkbox" className="form-checkbox h-5 w-5 text-blue-600" />
+          <span>classified-information</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <input type="checkbox" className="form-checkbox h-5 w-5 text-blue-600" />
+          <span>Legal -information</span>
+        </label>
+    </div>
+    <br/> 
+        <div className="flex items-center space-x-4">
+          <textarea
+            value={userInput}
+            onChange={handleInputChange}
+            placeholder="Type your prompt to redact here. Interactive AI Chatbot that will redact contents from the loaded document"
+            className="border border-gray-300 rounded p-4"
+            style={{ width: 'calc(100% - 150px)', height: '80px' }}
+          />
+          <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Send
+          </button>
+        </div>
       </form>
       <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '10px', height: '600px', overflowY: 'auto' }}>
         {conversation.map((msg, index) => (
